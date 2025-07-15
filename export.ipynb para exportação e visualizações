@@ -1,0 +1,68 @@
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## 🚀 Exportação e Visualização de Resultados
+# MAGIC Este notebook exporta os dados finais com perfis nomeados e similaridade, e gera visualizações para análise exploratória.
+
+# COMMAND ----------
+from pyspark.sql.functions import concat_ws
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+
+# COMMAND ----------
+# 📂 Exportação para CSV (perfils nomeados)
+df_export = df_match_nomeado.withColumn("categorias_1", concat_ws(";", "categorias_1")) \
+                                 .withColumn("categorias_2", concat_ws(";", "categorias_2"))
+
+path_output_profiles = "/FileStore/output/matched_profiles_nomeados.csv"
+df_export.write.mode("overwrite").csv(path_output_profiles, header=True)
+print(f"Arquivo exportado para: {path_output_profiles}")
+
+# COMMAND ----------
+# 🔄 Exportação da matriz de similaridade
+path_output_sim = "/FileStore/output/similarity_scores.csv"
+df_sim.write.mode("overwrite").csv(path_output_sim, header=True)
+print(f"Arquivo exportado para: {path_output_sim}")
+
+# COMMAND ----------
+# 📊 Visualização: Distribuição de perfis
+profile_counts = df_match_nomeado.groupBy("perfil_nomeado").count().orderBy("count", ascending=False)
+profile_counts_pd = profile_counts.toPandas()
+
+plt.figure(figsize=(10, 6))
+sns.barplot(x="perfil_nomeado", y="count", data=profile_counts_pd)
+plt.xticks(rotation=45)
+plt.title("Distribuição de Perfis Nomeados")
+plt.xlabel("Perfil")
+plt.ylabel("Número de Clientes")
+plt.tight_layout()
+plt.show()
+
+# COMMAND ----------
+# 🔢 Visualização de clusters (PCA 2D se disponível)
+from pyspark.ml.feature import PCA
+from pyspark.ml.linalg import Vectors
+from pyspark.ml.feature import VectorAssembler
+
+# Garantindo que temos PCA aplicado em 2 componentes para visualização
+assembler = VectorAssembler(inputCols=["ticket_medio", "frequencia", "recencia"], outputCol="features")
+df_features = assembler.transform(df_match_nomeado)
+
+pca_2d = PCA(k=2, inputCol="features", outputCol="pcaFeatures").fit(df_features)
+df_pca = pca_2d.transform(df_features)
+
+# Conversão para pandas para plotar
+extract_pca = udf(lambda v: float(v[0]), DoubleType())
+df_pca = df_pca.withColumn("pca_x", extract_pca("pcaFeatures"))
+df_pca = df_pca.withColumn("pca_y", udf(lambda v: float(v[1]), DoubleType())("pcaFeatures"))
+
+pdf = df_pca.select("pca_x", "pca_y", "perfil_nomeado").toPandas()
+
+plt.figure(figsize=(10, 7))
+sns.scatterplot(data=pdf, x="pca_x", y="pca_y", hue="perfil_nomeado", alpha=0.6, s=80)
+plt.title("Visualização dos Clusters via PCA")
+plt.xlabel("Componente Principal 1")
+plt.ylabel("Componente Principal 2")
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.tight_layout()
+plt.show()
