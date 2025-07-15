@@ -1,0 +1,51 @@
+# ✅ Testes e Outputs Esperados para Validação do Pipeline
+# Este notebook executa validações críticas dos resultados gerados ao longo do pipeline.
+
+from pyspark.sql.functions import col, countDistinct, avg, stddev
+
+# 1. Validação do dataset final de perfis nomeados
+df = spark.read.option("header", True).csv("/FileStore/output/matched_profiles_nomeados.csv")
+print("\n✅ Total de registros importados:", df.count())
+
+# 2. Teste de unicidade de idcliente
+print("\n✅ Verificando unicidade de idcliente...")
+df.select("idcliente").agg(countDistinct("idcliente")).show()
+
+# 3. Distribuição de perfis nomeados
+print("\n✅ Distribuição dos perfis:")
+df.groupBy("perfil_nomeado").count().orderBy("count", ascending=False).show(truncate=False)
+
+# 4. Estatísticas descritivas por perfil
+print("\n✅ Estatísticas descritivas por perfil:")
+df.select(
+    "perfil_nomeado", "ticket_medio", "frequencia", "recencia"
+).groupBy("perfil_nomeado").agg(
+    avg("ticket_medio").alias("avg_ticket"),
+    stddev("ticket_medio").alias("std_ticket"),
+    avg("frequencia").alias("avg_freq"),
+    stddev("frequencia").alias("std_freq")
+).orderBy("avg_ticket", ascending=False).show(truncate=False)
+
+# 5. Validação visual (disponível no notebook 04_export)
+print("\n✅ Visualização gráfica sugerida no notebook de exportação")
+print("   - Gráfico 2D dos clusters (PCA1 vs PCA2)")
+print("   - Distribuição de ticket_medio por perfil")
+print("   - Heatmap de categorias dominantes por perfil")
+
+# 6. Teste básico de consistência semântica
+def alerta_perfil_incomum(row):
+    if row['perfil_nomeado'] == 'Construtor' and float(row['frequencia']) <= 1:
+        return "Atenção: Construtor com freq ≤ 1"
+    return None
+
+import pandas as pd
+amostra = df.sample(fraction=0.01, seed=42).toPandas()
+amostra['check'] = amostra.apply(alerta_perfil_incomum, axis=1)
+print("\n⚠️ Perfis inconsistentes encontrados:")
+print(amostra[amostra['check'].notnull()][['idcliente', 'perfil_nomeado', 'frequencia', 'check']].head(10))
+
+# 7. Validação da similaridade
+print("\n✅ Verificando arquivo de similaridade gerado:")
+df_sim = spark.read.option("header", True).csv("/FileStore/output/similarity_scores.csv")
+print("\nTotal de pares similares computados:", df_sim.count())
+df_sim.show(5)
