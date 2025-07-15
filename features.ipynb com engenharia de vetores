@@ -1,0 +1,50 @@
+# Engenharia de Features (Vetores RFMT + Mix Binário) - Spark 100%
+
+from pyspark.sql.functions import col, countDistinct, avg, max as spark_max, datediff, current_date, lit, when
+from pyspark.ml.feature import VectorAssembler, StandardScaler, PCA
+from functools import reduce
+
+# === Carregamento dos dados tratados ===
+df = spark.read.parquet("/FileStore/output/clientes_tratados.parquet")
+
+# === Cálculo de RFMT ===
+df_rfmt = df.groupBy("idcliente").agg(
+    countDistinct("idfrequencia").alias("frequencia"),
+    avg("valorunitario").alias("ticket_medio"),
+    spark_max("dataconsumo").alias("ultima_compra"),
+    reduce(lambda a, b: a + b, [when(col(c) > 0, 1).otherwise(0) for c in df.columns if c not in ["idcliente", "dataconsumo", "idfrequencia", "valorunitario"]]).alias("diversidade_categorias")
+)
+df_rfmt = df_rfmt.withColumn("recencia", datediff(current_date(), col("ultima_compra")))
+
+# === Vetorizador RFMT ===
+rfmt_features = ["frequencia", "ticket_medio", "recencia", "diversidade_categorias"]
+assembler_rfmt = VectorAssembler(inputCols=rfmt_features, outputCol="RFMT_VECTOR")
+df_rfmt = assembler_rfmt.transform(df_rfmt)
+
+# === Escalonamento ===
+scaler_rfmt = StandardScaler(inputCol="RFMT_VECTOR", outputCol="RFMT_SCALED")
+df_rfmt = scaler_rfmt.fit(df_rfmt).transform(df_rfmt)
+
+# === PCA no RFMT ===
+pca_rfmt = PCA(k=min([3, len(rfmt_features)])).fit(df_rfmt.select("RFMT_SCALED"))
+df_rfmt = pca_rfmt.transform(df_rfmt).withColumnRenamed("pcaFeatures", "RFMT_PCA")
+
+# === Vetorizador MIX Binário ===
+categorias_cols = [c for c in df.columns if c not in ["idcliente", "dataconsumo", "idfrequencia", "valorunitario"]]
+df_mix = df.groupBy("idcliente").agg(*[when(col(c) > 0, 1).otherwise(0).alias(c) for c in categorias_cols])
+assembler_mix = VectorAssembler(inputCols=categorias_cols, outputCol="MIX_VECTOR")
+df_mix = assembler_mix.transform(df_mix)
+
+# === Escalonamento e PCA ===
+scaler_mix = StandardScaler(inputCol="MIX_VECTOR", outputCol="MIX_SCALED")
+df_mix = scaler_mix.fit(df_mix).transform(df_mix)
+pca_mix = PCA(k=min([5, len(categorias_cols)])).fit(df_mix.select("MIX_SCALED"))
+df_mix = pca_mix.transform(df_mix).withColumnRenamed("pcaFeatures", "MIX_PCA")
+
+# === Join Final dos Vetores ===
+df_final = df_rfmt.select("idcliente", "RFMT_PCA").join(
+    df_mix.select("idcliente", "MIX_PCA"), on="idcliente", how="inner"
+)
+
+# === Salvamento ===
+df_final.write.mode("overwrite").parquet("/FileStore/output/features_rfmt_mix.parquet")
