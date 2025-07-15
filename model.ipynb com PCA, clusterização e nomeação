@@ -1,0 +1,71 @@
+# Databricks notebook source
+# MAGIC %md
+# MAGIC ## 03 - Modelagem com PCA + Clusterização + Nomeação de Perfis
+
+# COMMAND ----------
+from pyspark.ml.feature import PCA, KMeans
+from pyspark.ml.evaluation import ClusteringEvaluator
+from pyspark.sql.functions import col, array, lit, create_map, size, array_intersect, when
+from pyspark.ml.linalg import Vectors
+from functools import reduce
+from operator import add
+
+# COMMAND ----------
+# === PCA RFMT ===
+pca_rfmt_k = min([3, len([col for col in df.columns if col.startswith("RFMT_")])])
+pca_rfmt = PCA(k=pca_rfmt_k, inputCol="RFMT_SCALED", outputCol="RFMT_PCA").fit(df)
+df = pca_rfmt.transform(df)
+
+# === PCA MIX ===
+pca_mix_k = min([5, len([col for col in df.columns if col.startswith("MIX_")])])
+pca_mix = PCA(k=pca_mix_k, inputCol="MIX_SCALED", outputCol="MIX_PCA").fit(df)
+df = pca_mix.transform(df)
+
+# === Juntar RFMT_PCA + MIX_PCA ===
+df = df.withColumn("features", array(*[col("RFMT_PCA")[i] for i in range(pca_rfmt_k)] + [col("MIX_PCA")[i] for i in range(pca_mix_k)]))
+
+# COMMAND ----------
+# === Clusterização com KMeans ===
+kmeans = KMeans(featuresCol="features", k=7, seed=42, predictionCol="cluster")
+model = kmeans.fit(df)
+df = model.transform(df)
+
+# Avaliação com Silhouette
+silhouette = ClusteringEvaluator().evaluate(df)
+print(f"Silhouette Score: {silhouette:.4f}")
+
+# COMMAND ----------
+# === Nomeação Dinâmica dos Perfis ===
+from pyspark.sql import functions as F
+
+# Ticket e freq média por cluster
+cluster_stats = df.groupBy("cluster").agg(
+    F.avg("ticket_medio").alias("avg_ticket"),
+    F.avg("frequencia_total").alias("avg_freq"),
+    F.expr("filter(sort_array(transform(array(*[{0}], x -> struct(x, {0}[x]))), x -> x.col2 desc)[0:3]", {'0': 'MIX_BIN'}).alias("top_categorias")
+)
+
+# Aplica lógica de nomeação
+def nomear(ticket, freq):
+    if ticket >= 150 and freq >= 3:
+        return "C"
+    elif ticket >= 150:
+        return "E"
+    elif freq >= 3:
+        return "PO"
+    else:
+        return "Ou"
+
+nomear_udf = F.udf(nomear, StringType())
+df = df.join(cluster_stats, on="cluster", how="left")
+df = df.withColumn("perfil_nomeado", nomear_udf("avg_ticket", "avg_freq"))
+
+# COMMAND ----------
+# === Salvar Resultados ===
+df.select("idcliente", "cluster", "perfil_nomeado").write.mode("overwrite").csv("/FileStore/output/perfis_nomeados.csv", header=True)
+
+# COMMAND ----------
+# Exibir distribuição final
+from pyspark.sql.functions import count
+
+df.groupBy("perfil_nomeado").agg(count("idcliente")).orderBy("perfil_nomeado").show()
