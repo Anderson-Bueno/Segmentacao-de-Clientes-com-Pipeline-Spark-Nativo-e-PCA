@@ -1,0 +1,51 @@
+# 📒 Notebook 01 - Preprocessamento de Dados
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, to_date, regexp_replace, when
+from pyspark.sql.types import DoubleType
+
+# Inicializa sessão Spark (Databricks já fornece por padrão)
+spark = SparkSession.builder.appName("PreprocessamentoCliente").getOrCreate()
+spark.conf.set("spark.sql.legacy.timeParserPolicy", "LEGACY")
+
+# Caminho para os dados (ajustar conforme necessidade)
+data_path = "dbfs:/FileStore/shared_uploads/data.parquet"
+
+# Carregar dados
+df_raw = spark.read.parquet(data_path)
+
+# Sanear e converter tipos
+df_clean = df_raw.dropDuplicates()
+df_clean = df_clean.filter(col("idcliente").isNotNull())
+df_clean = df_clean.withColumn("quantidade", col("quantidade").cast(DoubleType()))
+df_clean = df_clean.withColumn("valorunitario", col("valorunitario").cast(DoubleType()))
+df_clean = df_clean.withColumn("dataconsumo", to_date(col("dataconsumo"), "yyyy-MM-dd"))
+
+# Corrigir texto e acentos em colunas categóricas
+colunas_texto = ["produto", "categoria_nivel_1", "categoria_nivel_2", "marca"]
+for c in colunas_texto:
+    df_clean = df_clean.withColumn(c, regexp_replace(col(c), "[^\\x00-\\x7F]", ""))
+
+# Tratar valores negativos e nulos
+df_clean = df_clean.withColumn("quantidade", when(col("quantidade") < 0, None).otherwise(col("quantidade")))
+df_clean = df_clean.withColumn("valorunitario", when(col("valorunitario") < 0, None).otherwise(col("valorunitario")))
+df_clean = df_clean.withColumn("preco_total", when(col("quantidade") == 0, None).otherwise(col("quantidade") * col("valorunitario")))
+df_clean = df_clean.filter(col("dataconsumo") <= to_date(lit("today")))
+
+# Padroniza capitalização e maiúsculas
+df_clean = df_clean.withColumn("produto", initcap(col("produto")))
+df_clean = df_clean.withColumn("marca", upper(col("marca")))
+df_clean = df_clean.withColumn("categoria_nivel_1", upper(col("categoria_nivel_1")))
+df_clean = df_clean.withColumn("categoria_nivel_2", upper(col("categoria_nivel_2")))
+
+# Particionamento para distribução otimizada
+df_clean = df_clean.repartition(200, "idcliente")
+
+# Verificar schema e preview
+df_clean.printSchema()
+df_clean.show(5)
+
+# Persistir para uso posterior em pipeline
+intermediate_path = "dbfs:/FileStore/output/preprocess_clean.parquet"
+df_clean.write.mode("overwrite").parquet(intermediate_path)
+print(f"✅ Dados limpos e salvos em: {intermediate_path}")
