@@ -1,0 +1,23 @@
+Problema Central que o Modelo Resolve:
+
+Como extrair perfis de clientes acionáveis em grandes volumes de dados, garantindo escalabilidade (Spark) e interpretabilidade (nomeação dinâmica), para orientar estratégias de marketing e vendas.
+
+Detalhamento do Problema:
+
+Escalabilidade:
+
+Problema: Segmentação manual ou com ferramentas não distribuídas (ex: Pandas) torna-se inviável em grandes bases (ex: varejo com milhões de clientes).
+
+Solução do modelo: Pipeline 100% Spark nativo, otimizado para ambientes como Databricks.
+
+Interpretabilidade:
+
+Problema: Clusters tradicionais (ex: K-Means puro) geram grupos pouco explicáveis, dificultando a ação prática.
+
+Solução do modelo: Nomeação dinâmica baseada em regras de negócio (ex: "Clientes High-Value Frequent Buyers de Eletrônicos").
+
+Dinâmica de Negócio:
+
+Problema: Empresas precisam de segmentos atualizados e customizáveis (ex: priorizar clientes por similaridade a um perfil-alvo).
+
+Solução do modelo: Cálculo de similaridade via LSH (Local-Sensitive Hashing) e exportação para dashboards.
