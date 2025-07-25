@@ -1,0 +1,58 @@
+Como Foi Feito o Alinhamento
+
+1. Identificação dos Stakeholders
+
+Stakeholder:	Interesse no Problema
+Equipe de Marketing:	Quer segmentos acionáveis para campanhas personalizadas.
+Time de Dados:	Precisa de escalabilidade para processar milhões de registros.
+Produto:	Quer entender "quem" compra e "por que" para melhorar ofertas.
+TI/Infra:	Preocupa-se com custo computacional e compatibilidade (Databricks/Spark).
+
+2. Mapeamento do Problema Central
+
+Problema Geral:
+
+"Dificuldade em extrair perfis de clientes escaláveis, interpretáveis e atualizáveis a partir de grandes volumes de dados, levando a decisões de marketing ineficientes ou baseadas em intuição."
+
+3. Técnica Usada: "Problem Statement Canvas"
+
+Um quadro visual (ex: Miro) foi criado para mostrar:
+
+Dor Comum:
+
+Marketing: "Não consigo personalizar campanhas sem segmentos claros."
+
+Dados: "O Pandas não escala, e clusters sem nome são inúteis para negócio."
+
+TI: "Precisamos de soluções que não estourem o orçamento de cloud."
+
+Impacto Negativo:
+
+Campanhas com baixo ROI (por segmentação imprecisa).
+
+Tempo perdido em análises manuais.
+
+Solução Proposta (o seu pipeline):
+
+Spark: Resolve a escalabilidade (TI e Dados felizes).
+
+Nomeação Dinâmica: Traduz clusters em perfis como "Clientes High-Value de Eletrônicos" (Marketing e Produto felizes).
+
+LSH para Similaridade: Permite ações em tempo real (Vendas felizes).
+
+4. Ferramenta de Comunicação
+
+Um "one-pager" foi compartilhado com todos, contendo:
+
+Diagrama do Fluxo (dos dados brutos aos perfis nomeados).
+
+Exemplo Prático:
+
+"Campanha X usou os clusters nomeados e aumentou o ROI em 30% vs. abordagem anterior."
+
+Resultado do Alinhamento
+Marketing entendeu que os clusters não são "caixas pretas", mas perfis nomeados com base em regras de negócio.
+
+TI apoiou a adoção do Spark ao ver a redução de custos vs. processamento batch tradicional.
+
+Produto passou a usar os perfis para priorizar features no app.
