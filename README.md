@@ -1,4 +1,4 @@
-# 🧠 Segmentação de Clientes com Pipeline Spark-Nativo e PCA
+# 🧠 Como segmentar clientes de forma escalável e interpretável em grandes volumes de dados, garantindo que os perfis gerados sejam úteis para decisões de negócio ?
 
 Este projeto implementa um pipeline de **segmentação comportamental de clientes** utilizando uma abordagem **100% Spark nativa**, voltada para grandes volumes de dados e otimizada para execução em ambientes distribuídos como o **Databricks**.
 
